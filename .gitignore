@@ -129,6 +129,6 @@ dmypy.json
 .DS_Store
 Thumbs.db
 
-# Project specific
-data/recipes.csv
+# Project specific (uncomment if using real data with private recipes)
+# data/recipes.csv
 .streamlit/
