@@ -19,8 +19,8 @@ class PreferenceScorer:
     
     # Configurable weights
     WEIGHTS = {
-        'ingredient_similarity': 0.60,
-        'cuisine_match': 0.20,
+        'ingredient_similarity': 0.45,
+        'cuisine_match': 0.35,
         'meal_type_match': 0.10,
         'cooking_time': 0.10
     }

@@ -1,13 +1,15 @@
 # AI-Based Recipe Recommendation System
 
-An internship-grade, machine learning-powered recipe recommendation system built with a lightweight tech stack.
+An internship-grade, machine learning-powered recipe recommendation system with multi-dataset integration.
+
+**NEW**: Enhanced with Cleaned Indian Recipes Dataset via Kaggle API for cuisine-specific recommendations.
 
 ## 📋 Project Overview
 
 This system recommends personalized recipes based on:
 - **Available ingredients** (user provides comma-separated list)
 - **Preferred meal type** (breakfast, lunch, dinner, snack, dessert)
-- **Preferred cuisine** (Indian, Chinese, Italian, etc.)
+- **Preferred cuisine** (Indian, Chinese, Italian, etc.) - **Enhanced with dedicated Indian dataset**
 - **Maximum cooking time** (in minutes)
 
 The recommendation engine combines **content-based filtering** with **preference-aware ranking** to provide intelligent, explainable suggestions.
@@ -17,7 +19,7 @@ The recommendation engine combines **content-based filtering** with **preference
 Users often struggle to:
 1. Decide what to cook with available ingredients
 2. Find recipes matching their time constraints
-3. Discover cuisines they haven't tried before
+3. Discover cuisines they haven't tried before (especially authentic regional cuisines)
 4. Get reliable cooking tutorials
 
 This system solves these problems by:
@@ -25,18 +27,43 @@ This system solves these problems by:
 - Employing **TF-IDF vectorization** and **cosine similarity** for intelligent matching
 - Implementing **weighted preference scoring** for personalized recommendations
 - Providing **YouTube video links** for visual cooking guidance
+- **Integrating multiple real-world datasets** via Kaggle API for enhanced cuisine diversity
+
+## 📊 Datasets
+
+The system now integrates two complementary datasets:
+
+1. **Kaggle 64k Recipes Dataset** (Primary)
+   - 62,126 diverse recipes
+   - Multiple cuisines and meal types
+   - Established baseline for recommendations
+
+2. **Cleaned Indian Recipes Dataset** (NEW)
+   - ~250 authentic Indian recipes
+   - Enhanced Indian cuisine recommendations
+   - Programmatically downloaded via Kaggle API
+   - Seamlessly merged with primary dataset
+
+**Total**: ~62,400 recipes with improved Indian cuisine representation
 
 ## 🏗️ Architecture
 
 ```
+Data Loading (Phase 2) - NEW ENHANCED
+├─ Load 64k Kaggle Dataset
+├─ Download Indian Dataset via Kaggle API
+├─ Normalize Schemas
+└─ Merge Datasets
+
 User Input (Streamlit UI)
     ↓
 Application Logic (app.py)
     ↓
 ML Recommendation Engine (recommender.py)
-    ├─ TF-IDF Vectorization
-    ├─ Cosine Similarity Computation
-    └─ Top-N Candidate Selection
+    ├─ TF-IDF Vectorization (unchanged)
+    ├─ Cosine Similarity Computation (unchanged)
+    ├─ Top-N Candidate Selection (unchanged)
+    └─ Cuisine-Specific Prioritization (NEW)
     ↓
 Preference Weighting Engine (scoring.py)
     ├─ Hard Filters (cooking time, meal type, cuisine)

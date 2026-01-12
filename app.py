@@ -2,8 +2,18 @@
 AI-Based Recipe Recommendation System
 Main Streamlit application entrypoint.
 
-This module loads the recipe dataset and provides an interactive interface
-for users to get recipe recommendations based on their preferences.
+This module loads recipe datasets and provides an interactive interface
+for users to get recommendations based on their preferences.
+
+PHASE 2: Data Loading
+- Loads 64k Kaggle recipes dataset
+- Optionally loads Cleaned Indian Recipes dataset via Kaggle API
+- Normalizes schemas and merges into unified DataFrame
+
+PHASE 3+: Preprocessing, ML, and UI
+- Uses TF-IDF + cosine similarity for ingredient-based recommendations
+- Applies preference scoring and cuisine-specific prioritization
+- Provides Streamlit interface with video recommendations
 """
 
 import streamlit as st
@@ -14,6 +24,7 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
+from ml.data_loader import load_global_dataset
 from ml.preprocessing import RecipePreprocessor
 from ml.recommender import RecipeRecommender
 from ml.scoring import PreferenceScorer
@@ -33,37 +44,124 @@ if "recommender" not in st.session_state:
     st.session_state.preprocessor = None
     st.session_state.scorer = None
     st.session_state.youtube_gen = None
+    st.session_state.recipes_df = None
 
 def load_system():
-    """Load and initialize the recommendation system."""
+    """
+    Load and initialize the recommendation system.
+    
+    PHASE 2: Data Loading & Merging
+    - Loads 64k Kaggle recipes
+    - Loads Cleaned Indian Recipes via Kaggle API
+    - Merges and normalizes to unified schema
+    
+    PHASE 3+: Preprocessing and Model Building
+    - Applies preprocessing (JSON parsing, cleaning, feature engineering)
+    - Builds TF-IDF model for content-based recommendations
+    """
     try:
-        # Load data
+        st.write("**PHASE 2: Loading and merging recipe datasets...**")
+        
+        # Phase 2: Load merged dataset from multiple sources
+        merged_df = load_global_dataset(
+            force_refresh=False,
+            include_indian=True  # Include Indian recipes
+        )
+        
+        st.write(f"✓ Loaded {len(merged_df)} recipes from merged dataset")
+        st.write(f"  - Indian recipes: {len(merged_df[merged_df['cuisine'] == 'Indian'])}")
+        
+        # Phase 3+: Preprocess the merged dataset
+        st.write("**PHASE 3: Preprocessing and feature engineering...**")
+        
+        # Create a temporary CSV from merged data for preprocessing
+        # (PreprocessorRecipe expects CSV, so we work with the existing flow)
         st.session_state.preprocessor = RecipePreprocessor()
-        recipes_df = st.session_state.preprocessor.load_and_preprocess("data/recipes.csv")
+        
+        # Instead of loading from CSV, we'll directly assign and preprocess
+        st.session_state.preprocessor.df = merged_df.copy()
+        st.session_state.preprocessor.original_df = merged_df.copy()
+        
+        # Parse and prepare features (mimicking load_and_preprocess)
+        preprocessor = st.session_state.preprocessor
+        
+        # Create aliases for downstream compatibility
+        if 'ingredients_list' in merged_df.columns:
+            preprocessor.df['ingredients_list'] = merged_df['ingredients_list']
+        
+        if 'directions_list' in merged_df.columns:
+            preprocessor.df['directions_list'] = merged_df['directions_list']
+        
+        # Prepare ingredients text for TF-IDF
+        preprocessor.df['ingredients_text'] = preprocessor.df['ingredients_list'].apply(
+            preprocessor._prepare_ingredients_text
+        )
+        preprocessor.df['ingredients_cleaned'] = preprocessor.df['ingredients_text'].apply(
+            preprocessor._clean_ingredients
+        )
+        
+        # Create aliases for downstream compatibility
+        preprocessor.df['recipe_name'] = preprocessor.df['recipe_title']
+        preprocessor.df['instructions'] = preprocessor.df['directions_list'].apply(
+            lambda x: '\n'.join(x) if isinstance(x, list) else str(x)
+        )
+        preprocessor.df['ingredients'] = preprocessor.df['ingredients_text']
+        
+        # Add cooking_time if missing
+        if 'cooking_time' not in preprocessor.df.columns:
+            preprocessor.df['cooking_time'] = (
+                preprocessor.df['num_steps'].fillna(5) * 5
+            ).clip(5, 180)
+        
+        # Add meal_type if missing
+        if 'meal_type' not in preprocessor.df.columns:
+            preprocessor.df['meal_type'] = preprocessor.df['category'].fillna('other')
+        
+        # Remove empty recipes
+        recipes_df = preprocessor.df[
+            preprocessor.df['ingredients_cleaned'].str.len() > 0
+        ].reset_index(drop=True)
+        
+        st.write(f"✓ Preprocessed dataset: {len(recipes_df)} recipes")
+        
+        # Phase 4: Build ML model
+        st.write("**PHASE 4: Building TF-IDF and recommendation model...**")
+        
+        st.session_state.preprocessor = preprocessor
+        st.session_state.recipes_df = recipes_df
         
         # Initialize recommender
         st.session_state.recommender = RecipeRecommender(recipes_df)
         st.session_state.recommender.build_tfidf_model()
+        st.write("✓ Built TF-IDF vectorizer")
         
         # Initialize scorer
         st.session_state.scorer = PreferenceScorer()
+        st.write("✓ Initialized preference scorer")
         
         # Initialize YouTube generator
         st.session_state.youtube_gen = YouTubeRecommendationGenerator()
+        st.write("✓ Initialized YouTube recommendations")
+        
+        st.success("✓ System ready! All phases complete.")
         
         return recipes_df
+        
     except Exception as e:
         st.error(f"Error loading system: {e}")
+        import traceback
+        st.write(traceback.format_exc())
         return None
 
 def main():
     """Main application logic."""
     st.title("🍳 AI Recipe Recommendation System")
+    st.markdown("Built with real-world datasets: 64k Kaggle recipes + Cleaned Indian Recipes Dataset")
     st.markdown("---")
     
     # Load system
     if st.session_state.recommender is None:
-        with st.spinner("Loading recipe database and ML models..."):
+        with st.spinner("Initializing recommendation system (Phases 2-4)..."):
             recipes_df = load_system()
             if recipes_df is None:
                 st.stop()
@@ -127,8 +225,12 @@ def main():
                     )
                     
                     if recommendations.empty:
-                        st.info("No recipes found matching your criteria. Try adjusting your preferences!")
+                        st.info("❌ No recipes found matching your criteria. Try adjusting your preferences!")
                     else:
+                        # Check for fallback notification
+                        if hasattr(recommendations, '_fallback_notification'):
+                            st.warning(f"⚠️ {recommendations._fallback_notification}")
+                        
                         st.markdown("## 📋 Recommended Recipes")
                         st.markdown("---")
                         
@@ -150,6 +252,9 @@ def main():
                                     st.write(f"**Meal Type:** {recipe['meal_type']}")
                                 with col3:
                                     st.write(f"**⏱️ Time:** {recipe['cooking_time']} min")
+                                
+                                # Ingredients overlap info (new)
+                                st.write(f"**Ingredient Overlap:** {int(recipe['ingredient_overlap_count'])} of your ingredients matched")
                                 
                                 # Ingredients
                                 st.write("**Ingredients:**")
@@ -184,6 +289,8 @@ def main():
                 
                 except Exception as e:
                     st.error(f"Error generating recommendations: {e}")
+                    import traceback
+                    st.write(traceback.format_exc())
 
 if __name__ == "__main__":
     main()
